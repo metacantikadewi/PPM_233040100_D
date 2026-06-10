@@ -1,0 +1,495 @@
+import 'package:flutter/material.dart';
+import 'db_helper.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const MyApp());
+}
+
+class Catatan {
+  final int? id;
+  final String judul;
+  final String isi;
+  final String kategori;
+  final String email;
+  final DateTime dibuatPada;
+
+  Catatan({
+    this.id,
+    required this.judul,
+    required this.isi,
+    required this.kategori,
+    required this.email,
+    required this.dibuatPada,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      if (id != null) 'id': id,
+      'judul': judul,
+      'isi': isi,
+      'kategori': kategori,
+      'email': email,
+      'dibuat_pada': dibuatPada.millisecondsSinceEpoch,
+    };
+  }
+
+  factory Catatan.fromMap(Map<String, dynamic> map) {
+    return Catatan(
+      id: map['id'],
+      judul: map['judul'],
+      isi: map['isi'],
+      kategori: map['kategori'],
+      email: map['email'],
+      dibuatPada: DateTime.fromMillisecondsSinceEpoch(map['dibuat_pada']),
+    );
+  }
+
+  Catatan copyWith({
+    int? id,
+    String? judul,
+    String? isi,
+    String? kategori,
+    String? email,
+    DateTime? dibuatPada,
+  }) {
+    return Catatan(
+      id: id ?? this.id,
+      judul: judul ?? this.judul,
+      isi: isi ?? this.isi,
+      kategori: kategori ?? this.kategori,
+      email: email ?? this.email,
+      dibuatPada: dibuatPada ?? this.dibuatPada,
+    );
+  }
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Catatan Mahasiswa',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
+      initialRoute: '/',
+      onGenerateRoute: (settings) {
+        switch (settings.name) {
+          case '/':
+            return MaterialPageRoute(builder: (_) => const HomePage());
+          case '/tambah':
+            return MaterialPageRoute(builder: (_) => const TambahCatatanPage());
+          case '/edit':
+            final catatan = settings.arguments as Catatan;
+            return MaterialPageRoute(
+              builder: (_) => TambahCatatanPage(catatan: catatan),
+            );
+          case '/detail':
+            final args = settings.arguments as Map<String, dynamic>;
+            return MaterialPageRoute(
+              builder: (_) => DetailCatatanPage(
+                catatan: args['catatan'] as Catatan,
+                onUpdate: args['onUpdate'] as Function(),
+              ),
+            );
+        }
+        return null;
+      },
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  String _filterKategori = 'Semua';
+  final _filterOpsi = ['Semua', 'Kuliah', 'Tugas', 'Pribadi', 'Lainnya'];
+  late Future<List<Catatan>> _futureCatatan;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshCatatan();
+  }
+
+  void _refreshCatatan() {
+    setState(() {
+      _futureCatatan = DbHelper.instance.getAll();
+    });
+  }
+
+  List<Catatan> _filterList(List<Catatan> list) {
+    if (_filterKategori == 'Semua') return list;
+    return list.where((c) => c.kategori == _filterKategori).toList();
+  }
+
+  Future<void> _bukaTambahCatatan() async {
+    await Navigator.pushNamed(context, '/tambah');
+    _refreshCatatan();
+  }
+
+  Future<void> _hapusCatatan(int id, String judul) async {
+    // Menampilkan dialog konfirmasi
+    final konfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus Catatan'),
+        content: Text('Apakah Anda yakin ingin menghapus catatan "$judul"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    // Jika user menekan Batal atau menutup dialog tanpa menekan Hapus
+    if (konfirmasi != true) return;
+
+    await DbHelper.instance.delete(id);
+    _refreshCatatan();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Catatan "$judul" dihapus')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Catatan Mahasiswa'),
+        actions: [
+          DropdownButton<String>(
+            value: _filterKategori,
+            underline: const SizedBox(),
+            icon: const Icon(Icons.filter_list, color: Colors.indigo),
+            items: _filterOpsi.map((String value) {
+              return DropdownMenuItem<String>(
+                value: value,
+                child: Text(value, style: const TextStyle(fontSize: 14)),
+              );
+            }).toList(),
+            onChanged: (newValue) {
+              setState(() => _filterKategori = newValue!);
+            },
+          ),
+          const SizedBox(width: 16),
+        ],
+      ),
+      body: FutureBuilder<List<Catatan>>(
+        future: _futureCatatan,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Terjadi kesalahan: ${snapshot.error}'));
+          }
+
+          final filteredList = _filterList(snapshot.data ?? []);
+
+          if (filteredList.isEmpty) {
+            return const _EmptyState();
+          }
+
+          return ListView.builder(
+            itemCount: filteredList.length,
+            itemBuilder: (context, i) {
+              final c = filteredList[i];
+              return ListTile(
+                title: Text(c.judul),
+                subtitle: Text('${c.kategori} • ${_formatTanggal(c.dibuatPada)}'),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () => _hapusCatatan(c.id!, c.judul),
+                ),
+                onTap: () {
+                  Navigator.pushNamed(
+                    context,
+                    '/detail',
+                    arguments: {
+                      'catatan': c,
+                      'onUpdate': () => _refreshCatatan(),
+                    },
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _bukaTambahCatatan,
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.note_alt_outlined, size: 80, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          Text(
+            'Belum ada catatan untuk kategori ini.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatTanggal(DateTime dt) {
+  return "${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+}
+
+class TambahCatatanPage extends StatefulWidget {
+  final Catatan? catatan;
+  const TambahCatatanPage({super.key, this.catatan});
+
+  @override
+  State<TambahCatatanPage> createState() => _TambahCatatanPageState();
+}
+
+class _TambahCatatanPageState extends State<TambahCatatanPage> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _judulCtrl;
+  late TextEditingController _isiCtrl;
+  late TextEditingController _emailCtrl;
+  late String _kategori;
+
+  final _kategoriOpsi = const ['Kuliah', 'Tugas', 'Pribadi', 'Lainnya'];
+
+  @override
+  void initState() {
+    super.initState();
+    _judulCtrl = TextEditingController(text: widget.catatan?.judul ?? '');
+    _isiCtrl = TextEditingController(text: widget.catatan?.isi ?? '');
+    _emailCtrl = TextEditingController(text: widget.catatan?.email ?? '');
+    _kategori = widget.catatan?.kategori ?? 'Kuliah';
+  }
+
+  @override
+  void dispose() {
+    _judulCtrl.dispose();
+    _isiCtrl.dispose();
+    _emailCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _simpan() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (widget.catatan != null) {
+      final updated = widget.catatan!.copyWith(
+        judul: _judulCtrl.text.trim(),
+        isi: _isiCtrl.text.trim(),
+        kategori: _kategori,
+        email: _emailCtrl.text.trim(),
+      );
+      await DbHelper.instance.update(updated);
+    } else {
+      final baru = Catatan(
+        judul: _judulCtrl.text.trim(),
+        isi: _isiCtrl.text.trim(),
+        kategori: _kategori,
+        email: _emailCtrl.text.trim(),
+        dibuatPada: DateTime.now(),
+      );
+      await DbHelper.instance.insert(baru);
+    }
+
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.catatan != null;
+
+    return Scaffold(
+      appBar: AppBar(title: Text(isEdit ? 'Edit Catatan' : 'Tambah Catatan')),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            TextFormField(
+              controller: _judulCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Judul',
+                prefixIcon: Icon(Icons.title),
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Judul wajib diisi';
+                if (v.trim().length < 3) return 'Minimal 3 karakter';
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Email Pengirim',
+                hintText: 'contoh@mail.com',
+                prefixIcon: Icon(Icons.email),
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Email wajib diisi';
+                final bool emailValid = RegExp(
+                    r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+")
+                    .hasMatch(v);
+                if (!emailValid) return 'Format email tidak valid';
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              initialValue: _kategori,
+              decoration: const InputDecoration(
+                labelText: 'Kategori',
+                prefixIcon: Icon(Icons.category),
+                border: OutlineInputBorder(),
+              ),
+              items: _kategoriOpsi
+                  .map((k) => DropdownMenuItem(value: k, child: Text(k)))
+                  .toList(),
+              onChanged: (v) => setState(() => _kategori = v!),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _isiCtrl,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                labelText: 'Isi',
+                prefixIcon: Icon(Icons.notes),
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) =>
+              (v == null || v.trim().isEmpty) ? 'Isi wajib diisi' : null,
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: _simpan,
+              icon: Icon(isEdit ? Icons.edit : Icons.save),
+              label: Text(isEdit ? 'Simpan Perubahan' : 'Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class DetailCatatanPage extends StatefulWidget {
+  final Catatan catatan;
+  final Function() onUpdate;
+
+  const DetailCatatanPage({
+    super.key,
+    required this.catatan,
+    required this.onUpdate,
+  });
+
+  @override
+  State<DetailCatatanPage> createState() => _DetailCatatanPageState();
+}
+
+class _DetailCatatanPageState extends State<DetailCatatanPage> {
+  late Catatan _currentCatatan;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentCatatan = widget.catatan;
+  }
+
+  Future<void> _bukaEdit() async {
+    await Navigator.pushNamed(
+      context,
+      '/edit',
+      arguments: _currentCatatan,
+    );
+
+    // Refresh data from DB to get updated fields
+    final updated = await DbHelper.instance.getById(_currentCatatan.id!);
+
+    if (updated != null) {
+      setState(() => _currentCatatan = updated);
+      widget.onUpdate();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Detail Catatan'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: _bukaEdit,
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_currentCatatan.judul,
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Chip(label: Text(_currentCatatan.kategori)),
+                const SizedBox(width: 12),
+                Text(
+                  _formatTanggal(_currentCatatan.dibuatPada),
+                  style: const TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.email_outlined, size: 16, color: Colors.indigo),
+                const SizedBox(width: 8),
+                Text(_currentCatatan.email, style: const TextStyle(color: Colors.indigo)),
+              ],
+            ),
+            const Divider(height: 32),
+            const Text('Isi Catatan:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(_currentCatatan.isi, style: const TextStyle(fontSize: 16, height: 1.5)),
+          ],
+        ),
+      ),
+    );
+  }
+}
