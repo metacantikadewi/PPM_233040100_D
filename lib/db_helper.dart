@@ -1,405 +1,80 @@
-import 'package:flutter/material.dart';
-import 'db_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'main.dart' show Catatan;
 
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MyApp());
-}
+class DbHelper {
+  DbHelper._();
+  static final DbHelper instance = DbHelper._();
 
-// ============================================================
-// MODEL
-// ============================================================
+  static const String _key = 'catatan_list';
+  SharedPreferences? _prefs;
+  List<Catatan> _data = [];
+  int _nextId = 1;
 
-class Catatan {
-  final int? id;
-  final String judul;
-  final String isi;
-  final String kategori;
-  final DateTime dibuatPada;
-
-  Catatan({
-    this.id,
-    required this.judul,
-    required this.isi,
-    required this.kategori,
-    required this.dibuatPada,
-  });
-
-  Map<String, Object?> toMap() => {
-    'id': id,
-    'judul': judul,
-    'isi': isi,
-    'kategori': kategori,
-    'dibuat_pada': dibuatPada.millisecondsSinceEpoch,
-  };
-
-  static Catatan fromMap(Map<String, Object?> m) => Catatan(
-    id: m['id'] as int?,
-    judul: m['judul'] as String,
-    isi: m['isi'] as String,
-    kategori: m['kategori'] as String,
-    dibuatPada: DateTime.fromMillisecondsSinceEpoch(m['dibuat_pada'] as int),
-  );
-
-  Catatan copyWith({String? judul, String? isi, String? kategori}) => Catatan(
-    id: id,
-    judul: judul ?? this.judul,
-    isi: isi ?? this.isi,
-    kategori: kategori ?? this.kategori,
-    dibuatPada: dibuatPada,
-  );
-}
-
-// ============================================================
-// APP
-// ============================================================
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Catatan Mahasiswa',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: Colors.indigo,
-        useMaterial3: true,
-      ),
-      initialRoute: '/',
-      onGenerateRoute: (settings) {
-        switch (settings.name) {
-          case '/':
-            return MaterialPageRoute(builder: (_) => const HomePage());
-          case '/form':
-            final arg = settings.arguments;
-            return MaterialPageRoute(
-              builder: (_) => CatatanFormPage(initial: arg as Catatan?),
-            );
-          case '/detail':
-            final c = settings.arguments as Catatan;
-            return MaterialPageRoute(
-              builder: (_) => DetailCatatanPage(catatan: c),
-            );
-        }
-        return null;
-      },
-    );
-  }
-}
-
-// ============================================================
-// HOME PAGE
-// ============================================================
-
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
-
-  @override
-  State<HomePage> createState() => _HomePageState();
-}
-
-class _HomePageState extends State<HomePage> {
-  late Future<List<Catatan>> _futureCatatan;
-
-  @override
-  void initState() {
-    super.initState();
-    _muatUlang();
-  }
-
-  void _muatUlang() {
-    setState(() {
-      _futureCatatan = DbHelper.instance.getAll();
-    });
-  }
-
-  Future<void> _bukaForm({Catatan? initial}) async {
-    await Navigator.pushNamed(context, '/form', arguments: initial);
-    _muatUlang();
-  }
-
-  Future<void> _konfirmasiHapus(Catatan c) async {
-    final yakin = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Hapus catatan?'),
-        content: Text('"${c.judul}" akan dihapus permanen.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Hapus'),
-          ),
-        ],
-      ),
-    );
-
-    if (yakin == true) {
-      await DbHelper.instance.delete(c.id!);
-      if (!mounted) return;
-      _muatUlang();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"${c.judul}" dihapus')),
-      );
-    }
-  }
-
-  Widget _itemCatatan(Catatan c) {
-    return Card(
-      child: ListTile(
-        title: Text(c.judul, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(c.kategori),
-        onTap: () => Navigator.pushNamed(context, '/detail', arguments: c),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => _bukaForm(initial: c),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () => _konfirmasiHapus(c),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Catatan Mahasiswa'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _muatUlang,
-          ),
-        ],
-      ),
-      body: FutureBuilder<List<Catatan>>(
-        future: _futureCatatan,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-          final data = snapshot.data ?? const [];
-          if (data.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.notes, size: 64, color: Colors.grey),
-                  SizedBox(height: 8),
-                  Text('Belum ada catatan',
-                      style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-            );
-          }
-          return ListView.separated(
-            itemCount: data.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 4),
-            padding: const EdgeInsets.all(12),
-            itemBuilder: (_, i) => _itemCatatan(data[i]),
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _bukaForm(),
-        icon: const Icon(Icons.add),
-        label: const Text('Tambah'),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// FORM PAGE (CREATE + EDIT)
-// ============================================================
-
-class CatatanFormPage extends StatefulWidget {
-  final Catatan? initial;
-  const CatatanFormPage({super.key, this.initial});
-
-  @override
-  State<CatatanFormPage> createState() => _CatatanFormPageState();
-}
-
-class _CatatanFormPageState extends State<CatatanFormPage> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _judulCtrl;
-  late final TextEditingController _isiCtrl;
-  late String _kategori;
-  final _kategoriOpsi = const ['Kuliah', 'Tugas', 'Pribadi', 'Lainnya'];
-  bool _menyimpan = false;
-
-  bool get _isEdit => widget.initial != null;
-
-  @override
-  void initState() {
-    super.initState();
-    _judulCtrl = TextEditingController(text: widget.initial?.judul ?? '');
-    _isiCtrl = TextEditingController(text: widget.initial?.isi ?? '');
-    _kategori = widget.initial?.kategori ?? 'Kuliah';
-  }
-
-  @override
-  void dispose() {
-    _judulCtrl.dispose();
-    _isiCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _simpan() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _menyimpan = true);
+  Future<void> init() async {
     try {
-      if (_isEdit) {
-        final updated = widget.initial!.copyWith(
-          judul: _judulCtrl.text.trim(),
-          isi: _isiCtrl.text.trim(),
-          kategori: _kategori,
-        );
-        await DbHelper.instance.update(updated);
-      } else {
-        final baru = Catatan(
-          judul: _judulCtrl.text.trim(),
-          isi: _isiCtrl.text.trim(),
-          kategori: _kategori,
-          dibuatPada: DateTime.now(),
-        );
-        await DbHelper.instance.insert(baru);
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(_isEdit ? 'Catatan diperbarui' : 'Catatan ditambahkan'),
-      ));
-      Navigator.pop(context);
+      _prefs = await SharedPreferences.getInstance();
+      _loadFromStorage();
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _menyimpan = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
+      print('Error initializing SharedPreferences: $e');
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_isEdit ? 'Edit Catatan' : 'Tambah Catatan'),
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            TextFormField(
-              controller: _judulCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Judul',
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) =>
-              (v == null || v.trim().isEmpty) ? 'Judul wajib diisi' : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _isiCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Isi',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 5,
-              validator: (v) =>
-              (v == null || v.trim().isEmpty) ? 'Isi wajib diisi' : null,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: _kategori,
-              decoration: const InputDecoration(
-                labelText: 'Kategori',
-                border: OutlineInputBorder(),
-              ),
-              items: _kategoriOpsi
-                  .map((k) => DropdownMenuItem(value: k, child: Text(k)))
-                  .toList(),
-              onChanged: (v) => setState(() => _kategori = v!),
-            ),
-            const SizedBox(height: 20),
-            FilledButton(
-              onPressed: _menyimpan ? null : _simpan,
-              child: _menyimpan
-                  ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-                  : Text(_isEdit ? 'Perbarui' : 'Simpan'),
-            ),
-          ],
-        ),
-      ),
-    );
+  void _loadFromStorage() {
+    try {
+      final jsonString = _prefs?.getString(_key);
+      if (jsonString != null && jsonString.isNotEmpty) {
+        final list = jsonDecode(jsonString) as List;
+        _data = [for (final item in list) Catatan.fromMap(Map<String, Object?>.from(item as Map))];
+        _nextId = _data.isEmpty ? 1 : (_data.map((c) => c.id!).reduce((a, b) => a > b ? a : b) + 1);
+      }
+    } catch (e) {
+      print('Error loading from storage: $e');
+      _data = [];
+      _nextId = 1;
+    }
   }
-}
 
-// ============================================================
-// DETAIL PAGE
-// ============================================================
+  Future<void> _saveToStorage() async {
+    try {
+      if (_prefs == null) return;
+      final jsonString = jsonEncode([for (final c in _data) c.toMap()]);
+      await _prefs!.setString(_key, jsonString);
+    } catch (e) {
+      print('Error saving to storage: $e');
+    }
+  }
 
-class DetailCatatanPage extends StatelessWidget {
-  final Catatan catatan;
-  const DetailCatatanPage({super.key, required this.catatan});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Detail Catatan'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () async {
-              await Navigator.pushNamed(context, '/form', arguments: catatan);
-              if (context.mounted) Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Chip(label: Text(catatan.kategori)),
-            const SizedBox(height: 8),
-            Text(catatan.judul,
-                style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 4),
-            Text(
-              catatan.dibuatPada.toString().substring(0, 16),
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Colors.grey),
-            ),
-            const Divider(height: 24),
-            Text(catatan.isi),
-          ],
-        ),
-      ),
+  Future<int> insert(Catatan c) async {
+    final newCatatan = Catatan(
+      id: _nextId,
+      judul: c.judul,
+      isi: c.isi,
+      kategori: c.kategori,
+      dibuatPada: c.dibuatPada,
     );
+    _data.add(newCatatan);
+    _nextId++;
+    await _saveToStorage();
+    return newCatatan.id!;
+  }
+
+  Future<List<Catatan>> getAll() async {
+    return _data.toList()..sort((a, b) => b.dibuatPada.compareTo(a.dibuatPada));
+  }
+
+  Future<int> update(Catatan c) async {
+    final index = _data.indexWhere((e) => e.id == c.id);
+    if (index == -1) return 0;
+    _data[index] = c;
+    await _saveToStorage();
+    return 1;
+  }
+
+  Future<int> delete(int id) async {
+    final initialLength = _data.length;
+    _data.removeWhere((e) => e.id == id);
+    await _saveToStorage();
+    return _data.length < initialLength ? 1 : 0;
   }
 }
