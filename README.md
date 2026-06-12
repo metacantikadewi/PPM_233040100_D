@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # pertemuan_5
+=======
+# latihan
+>>>>>>> 67c181061de2f884f551baac0039ac87f35d1065
 
 A new Flutter project.
 

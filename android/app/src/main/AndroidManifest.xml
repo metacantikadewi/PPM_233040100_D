@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
+<<<<<<< HEAD
         android:label="pertemuan_5"
+=======
+        android:label="latihan"
+>>>>>>> 67c181061de2f884f551baac0039ac87f35d1065
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

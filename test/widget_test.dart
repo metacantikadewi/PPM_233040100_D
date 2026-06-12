@@ -8,7 +8,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+<<<<<<< HEAD
 import 'package:pertemuan5/main.dart';
+=======
+import 'package:latihan/main.dart';
+>>>>>>> 67c181061de2f884f551baac0039ac87f35d1065
 
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
@@ -27,4 +31,8 @@ void main() {
     expect(find.text('0'), findsNothing);
     expect(find.text('1'), findsOneWidget);
   });
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 67c181061de2f884f551baac0039ac87f35d1065
