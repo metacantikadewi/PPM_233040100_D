@@ -42,7 +42,7 @@ class _MainScreenState extends State<MainScreen> {
   Uint8List? imgBytes;
 
   // State Data Pengalaman (Bonus)
-  String expTitle = 'Belum ada pengalaman';
+  String expTitle = 'analys';
   String expDesc = 'Tambahkan melalui menu Upload Pengalaman di samping.';
   Uint8List? expImgBytes;
 

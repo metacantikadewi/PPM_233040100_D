@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-
+import 'api_client.dart';
 import 'catatan.dart';
-import 'pages/home_page.dart';
-import 'pages/catatan_form_page.dart';
-import 'pages/detail_catatan_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -15,32 +12,72 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Catatan Mahasiswa',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6366F1),
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-        fontFamily: 'Roboto',
-      ),
+      title: 'Catatan REST API',
       home: const HomePage(),
-      onGenerateRoute: (settings) {
-        switch (settings.name) {
-          case '/form':
-            final arg = settings.arguments;
-            return MaterialPageRoute(
-              builder: (_) => CatatanFormPage(initial: arg as Catatan?),
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  late Future<List<Catatan>> futureCatatan;
+
+  @override
+  void initState() {
+    super.initState();
+    futureCatatan = ApiClient.instance.getAll();
+  }
+
+  void refreshData() {
+    setState(() {
+      futureCatatan = ApiClient.instance.getAll();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Daftar Catatan"),
+      ),
+      body: FutureBuilder<List<Catatan>>(
+        future: futureCatatan,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState ==
+              ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(),
             );
-          case '/detail':
-            final c = settings.arguments as Catatan;
-            return MaterialPageRoute(
-              builder: (_) => DetailCatatanPage(catatan: c),
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(snapshot.error.toString()),
             );
-        }
-        return null;
-      },
+          }
+
+          final data = snapshot.data ?? [];
+
+          return ListView.builder(
+            itemCount: data.length,
+            itemBuilder: (context, index) {
+              final c = data[index];
+
+              return ListTile(
+                title: Text(c.judul),
+                subtitle: Text(c.kategori),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

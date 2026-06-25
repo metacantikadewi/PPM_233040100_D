@@ -21,20 +21,27 @@ class Catatan {
     'dibuat_pada': dibuatPada.toUtc().toIso8601String(),
   };
 
-  static Catatan fromJson(Map<String, dynamic> m) => Catatan(
-    id: m['id'] as int?,
-    judul: m['judul'] as String,
-    isi: m['isi'] as String,
-    kategori: m['kategori'] as String,
-    dibuatPada: DateTime.parse(m['dibuat_pada'] as String),
-  );
+  factory Catatan.fromJson(Map<String, dynamic> m) {
+    return Catatan(
+      id: m['id'],
+      judul: m['judul'],
+      isi: m['isi'],
+      kategori: m['kategori'],
+      dibuatPada: DateTime.parse(m['dibuat_pada']),
+    );
+  }
 
-  /// Helper untuk Edit — copy dengan beberapa field diganti
-  Catatan copyWith({String? judul, String? isi, String? kategori}) => Catatan(
-    id: id,
-    judul: judul ?? this.judul,
-    isi: isi ?? this.isi,
-    kategori: kategori ?? this.kategori,
-    dibuatPada: dibuatPada,
-  );
+  Catatan copyWith({
+    String? judul,
+    String? isi,
+    String? kategori,
+  }) {
+    return Catatan(
+      id: id,
+      judul: judul ?? this.judul,
+      isi: isi ?? this.isi,
+      kategori: kategori ?? this.kategori,
+      dibuatPada: dibuatPada,
+    );
+  }
 }
